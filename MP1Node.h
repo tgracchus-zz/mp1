@@ -50,7 +50,7 @@ enum MsgTypes
 typedef struct MessageHdr
 {
   enum MsgTypes msgType;
-}MessageHdr;
+} MessageHdr;
 
 enum Status
 {
@@ -67,8 +67,7 @@ typedef struct Message
   Event piggyBack3;
   Event piggyBack4;
   int sizePiggyBack = 0;
-}Message;
-
+} Message;
 
 /**
  * NodeList
@@ -166,11 +165,12 @@ private:
   long timestamp;
   EventList* failuresNodes;
   EventList* updatesNodes;
-  MembershipList* memberShipList;
 
-  MemberSwimListEntry*
-  addToMemberShipList (Address* address, long hbeat, long timestamp,
-		       Status status);
+  MembershipList* memberShipList;
+  std::vector<MemberSwimListEntry>::iterator memberOffset;
+
+  std::vector<MemberSwimListEntry>::iterator addToMemberShipList (Address* address, long hbeat, long timestamp,
+      Status status);
 
   EventListEntry*
   addToUpdatesList (MemberSwimListEntry* member, Event* event);

@@ -182,7 +182,7 @@ MP1Node::introduceSelfToGroup (Address *joinaddr)
       msg->sizePiggyBack = 0;
 
       //serialize message
-      char data[sizeof(MessageHdr)+sizeof(Message)];
+      char data[sizeof(MessageHdr) + sizeof(Message)];
       memcpy ((char*) (data), header, sizeof(MessageHdr));
       memcpy ((char*) (data + sizeof(MessageHdr)), msg, sizeof(Message));
 
@@ -197,8 +197,6 @@ MP1Node::introduceSelfToGroup (Address *joinaddr)
   return 1;
 
 }
-
-
 
 /**
  * FUNCTION NAME: finishUpThisNode
@@ -300,11 +298,11 @@ void
 MP1Node::handleJoinResponse (Message* msg)
 {
   //add first node to membership list
-  MemberSwimListEntry* memberShip = addToMemberShipList (&msg->sender,
-							 msg->heartbeat,
-							 timestamp, ALIVE);
+  memberOffset = addToMemberShipList (&msg->sender, msg->heartbeat, timestamp,
+				      ALIVE);
+
   Event event = msg->piggyBack0;
-  addToUpdatesList (memberShip, &event);
+  addToUpdatesList (&(*memberOffset), &event);
 
   //mark node as Joined
   memberNode->inGroup = true;
@@ -316,16 +314,16 @@ MP1Node::handleJoinRequest (Message* msg)
 {
 
   //add Joiner node to membership list
-  MemberSwimListEntry* memberShip = addToMemberShipList (&msg->sender,
-							 msg->heartbeat,
-							 timestamp, ALIVE);
+  memberOffset = addToMemberShipList (&msg->sender, msg->heartbeat, timestamp,
+				      ALIVE);
+
   Event* event = new Event;
-  event->type=JOINED;
-  event->target=msg->sender;
-  event->claimed=memberNode->addr;
-  event->claimer=memberNode->addr;
-  event->incarnation=0;
-  addToUpdatesList (memberShip, event);
+  event->type = JOINED;
+  event->target = msg->sender;
+  event->claimed = memberNode->addr;
+  event->claimer = memberNode->addr;
+  event->incarnation = 0;
+  addToUpdatesList (&(*memberOffset), event);
 
   //create response message
   MessageHdr* header = new MessageHdr;
@@ -335,30 +333,29 @@ MP1Node::handleJoinRequest (Message* msg)
   Message* msgBack = new Message;
   msgBack->sender = memberNode->addr;
   msgBack->heartbeat = memberNode->heartbeat;
-  msgBack->piggyBack0= *event;
+  msgBack->piggyBack0 = *event;
   msgBack->sizePiggyBack++;
 
   //serialize message
-  char data[sizeof(MessageHdr)+sizeof(Message)];
+  char data[sizeof(MessageHdr) + sizeof(Message)];
   memcpy ((char*) (data), header, sizeof(MessageHdr));
   memcpy ((char*) (data + sizeof(MessageHdr)), msg, sizeof(Message));
 
   emulNet->ENsend (&memberNode->addr, &msg->sender, data,
-		       sizeof(Message) + sizeof(MessageHdr));
+		   sizeof(Message) + sizeof(MessageHdr));
 
   free (msgBack);
   free (header);
 
 }
 
-MemberSwimListEntry*
+std::vector<MemberSwimListEntry>::iterator
 MP1Node::addToMemberShipList (Address* address, long hbeat, long timestamp,
 			      Status status)
 {
   MemberSwimListEntry* entry = new MemberSwimListEntry (address, hbeat,
 							timestamp, status, 0);
-  memberShipList->list.insert (memberShipList->list.end (), *entry);
-  return entry;
+  return memberShipList->list.insert (memberShipList->list.end (), *entry);
 }
 
 EventListEntry*
@@ -383,6 +380,13 @@ MP1Node::nodeLoopOps ()
   /*
    * Your code goes here
    */
+
+  //select k nodes for ping
+  int members = this->memberShipList->list.size ();
+  for (int i = 0; i < kRamdomProcesses; i++)
+    {
+
+    }
 
   return;
 }
@@ -441,9 +445,6 @@ MP1Node::printAddress (Address *addr)
   printf ("%d.%d.%d.%d:%d \n", addr->addr[0], addr->addr[1], addr->addr[2],
 	  addr->addr[3], *(short*) &addr->addr[4]);
 }
-
-
-
 
 MembershipList::MembershipList ()
 {

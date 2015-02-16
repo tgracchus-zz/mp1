@@ -428,10 +428,13 @@ void
 MP1Node::initMemberListTable (Member *memberNode, int id, short port)
 {
   memberNode->memberList.clear ();
-  MemberListEntry* entry = new MemberListEntry (id, port, memberNode->heartbeat,
-						timestamp);
-  memberNode->memberList.insert (memberNode->memberList.begin (), *entry);
-  memberNode->myPos = memberNode->memberList.begin ();
+  Address addr;
+  memset (&addr, 0, sizeof(Address));
+  *(int *) (&addr.addr) = id;
+  *(short *) (&addr.addr[4]) = port;
+
+  memberShipList->myPos = addToMemberShipList (&addr, this->memberNode->heartbeat,
+					   timestamp, ALIVE);
 }
 
 /**

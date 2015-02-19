@@ -383,8 +383,9 @@ MP1Node::nodeLoopOps ()
 
   //select k nodes for ping
   int members = this->memberShipList->list.size ();
-  for (int i = 0; i < kRamdomProcesses; i++)
+  for (int i = 0; i < kRamdomProcesses && i<members; i++)
     {
+
 
     }
 

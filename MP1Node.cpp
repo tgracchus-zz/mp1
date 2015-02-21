@@ -147,7 +147,7 @@ MP1Node::initThisNode (Address *joinaddr)
  */
 int
 MP1Node::introduceSelfToGroup (Address *joinaddr)
-{
+{ 
 
 #ifdef DEBUGLOG
   static char s[1024];

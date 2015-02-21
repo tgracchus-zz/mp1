@@ -21,203 +21,61 @@
 #define TREMOVE 20
 #define TFAIL 5
 
-/**
- * Events
+/*
+ * Note: You can change/add any functions in MP1Node.{h,cpp}
  */
 
-enum EventTypes
-{
-  ACTIVE, SUSPECT, FAIL, JOINED //Events to disseminate
+/**
+ * Message Types
+ */
+enum MsgTypes{
+    JOINREQ,
+    JOINREP,
+    DUMMYLASTMSGTYPE
 };
-
-typedef struct Event
-{
-  EventTypes type;
-  Address target;
-  Address claimer;
-  Address claimed;
-  int incarnation;
-} Event;
 
 /**
- * Messages
+ * STRUCT NAME: MessageHdr
+ *
+ * DESCRIPTION: Header and content of a message
  */
-enum MsgTypes
-{
-  JOINREQ, JOINREP, PING, ACK, PINGREQ
-};
-
-typedef struct MessageHdr
-{
-  enum MsgTypes msgType;
-} MessageHdr;
-
-enum Status
-{
-  ALIVE, DOUBT, CONFIRM
-};
-
-typedef struct Message
-{
-  Address sender;
-  long heartbeat;
-  Event piggyBack0;
-  Event piggyBack1;
-  Event piggyBack2;
-  Event piggyBack3;
-  Event piggyBack4;
-  int sizePiggyBack = 0;
-} Message;
-
-/**
- * NodeList
- */
-class MemberSwimListEntry
-{
-private:
-  Address* address;
-  long heartbeat;
-  long timestamp;
-  Status status;
-  int incarnation;
-public:
-  MemberSwimListEntry (Address* address, int heartbeat, long timestamp,
-		       Status status, int incarnation);
-  ~MemberSwimListEntry ();
-  long
-  getHeartbeat () const;
-  void
-  setHeartbeat (long heartbeat);
-  int
-  getIncarnation () const;
-  void
-  setIncarnation (int incarnation);
-  Status
-  getStatus () const;
-  void
-  setStatus (Status status);
-  long
-  getTimestamp () const;
-  void
-  setTimestamp (long timestamp);
-  Address*
-  getAddress () const;
-  void
-  setAddress (Address* address);
-};
-
-class MembershipList
-{
-public:
-  MembershipList ();
-  ~MembershipList ();
-  std::vector<MemberSwimListEntry> list;
-  std::vector<MemberSwimListEntry>::iterator myPos;
-};
-
-class EventListEntry
-{
-public:
-  const MemberSwimListEntry* member;
-  const Event* event;
-  int goshiped;
-  EventListEntry (MemberSwimListEntry* entry, Event* event);
-  ~EventListEntry ();
-  const Event*
-  getEvent () const;
-  void
-  setEvent (const Event* event);
-  int
-  getGoshiped () const;
-  void
-  setGoshiped (int goshiped);
-  const MemberSwimListEntry*
-  getMember () const;
-  void
-  setMember (const MemberSwimListEntry* member);
-};
-
-class EventList
-{
-public:
-  EventList ();
-  ~EventList ();
-  std::vector<EventListEntry> list;
-  std::vector<EventListEntry>::iterator myPos;
-};
+typedef struct MessageHdr {
+	enum MsgTypes msgType;
+}MessageHdr;
 
 /**
  * CLASS NAME: MP1Node
  *
  * DESCRIPTION: Class implementing Membership protocol functionalities for failure detection
  */
-class MP1Node
-{
-
+class MP1Node {
 private:
-  EmulNet *emulNet;
-  Log *log;
-  Params *par;
-  Member *memberNode;
-  char NULLADDR[6];
-
-  int kRamdomProcesses;
-  long timestamp;
-  EventList* failuresNodes;
-  EventList* updatesNodes;
-
-  MembershipList* memberShipList;
-  std::vector<MemberSwimListEntry>::iterator memberOffset;
-
-  std::vector<MemberSwimListEntry>::iterator addToMemberShipList (Address* address, long hbeat, long timestamp,
-      Status status);
-
-  EventListEntry*
-  addToUpdatesList (MemberSwimListEntry* member, Event* event);
-
-  void
-  handleJoinResponse (Message* msg);
-  void
-  handleJoinRequest (Message* msg);
+	EmulNet *emulNet;
+	Log *log;
+	Params *par;
+	Member *memberNode;
+	char NULLADDR[6];
 
 public:
-  MP1Node (Member *, Params *, EmulNet *, Log *, Address *);
-  Member *
-  getMemberNode ()
-  {
-    return memberNode;
-  }
-  int
-  recvLoop ();
-  static int
-  enqueueWrapper (void *env, char *buff, int size);
-  void
-  nodeStart (char *servaddrstr, short serverport);
-  int
-  initThisNode (Address *joinaddr);
-  int
-  introduceSelfToGroup (Address *joinAddress);
-  int
-  finishUpThisNode ();
-  void
-  nodeLoop ();
-  void
-  checkMessages ();
-  bool
-  recvCallBack (void *env, char *data, int size);
-  void
-  nodeLoopOps ();
-  int
-  isNullAddress (Address *addr);
-  Address
-  getJoinAddress ();
-  void
-  initMemberListTable (Member *memberNode, int id, short port);
-  void
-  printAddress (Address *addr);
-  virtual
-  ~MP1Node ();
-
+	MP1Node(Member *, Params *, EmulNet *, Log *, Address *);
+	Member * getMemberNode() {
+		return memberNode;
+	}
+	int recvLoop();
+	static int enqueueWrapper(void *env, char *buff, int size);
+	void nodeStart(char *servaddrstr, short serverport);
+	int initThisNode(Address *joinaddr);
+	int introduceSelfToGroup(Address *joinAddress);
+	int finishUpThisNode();
+	void nodeLoop();
+	void checkMessages();
+	bool recvCallBack(void *env, char *data, int size);
+	void nodeLoopOps();
+	int isNullAddress(Address *addr);
+	Address getJoinAddress();
+	void initMemberListTable(Member *memberNode);
+	void printAddress(Address *addr);
+	virtual ~MP1Node();
 };
 
 #endif /* _MP1NODE_H_ */

@@ -16,34 +16,21 @@
  * You can add new members to the class if you think it
  * is necessary for your logic to work
  */
-MP1Node::MP1Node (Member *member, Params *params, EmulNet *emul, Log *log,
-		  Address *address)
-{
-  for (int i = 0; i < 6; i++)
-    {
-      NULLADDR[i] = 0;
-    }
-  this->memberNode = member;
-  this->emulNet = emul;
-  this->log = log;
-  this->par = params;
-  this->memberNode->addr = *address;
-  this->kRamdomProcesses = 3;
-  this->timestamp = 0;
-  this->updatesNodes = new EventList;
-  this->failuresNodes = new EventList;
-  this->memberShipList = new MembershipList;
+MP1Node::MP1Node(Member *member, Params *params, EmulNet *emul, Log *log, Address *address) {
+	for( int i = 0; i < 6; i++ ) {
+		NULLADDR[i] = 0;
+	}
+	this->memberNode = member;
+	this->emulNet = emul;
+	this->log = log;
+	this->par = params;
+	this->memberNode->addr = *address;
 }
 
 /**
  * Destructor of the MP1Node class
  */
-MP1Node::~MP1Node ()
-{
-  delete updatesNodes;
-  delete failuresNodes;
-  //TODO: delete nodes
-}
+MP1Node::~MP1Node() {}
 
 /**
  * FUNCTION NAME: recvLoop
@@ -51,17 +38,12 @@ MP1Node::~MP1Node ()
  * DESCRIPTION: This function receives message from the network and pushes into the queue
  * 				This function is called by a node to receive messages currently waiting for it
  */
-int
-MP1Node::recvLoop ()
-{
-  if (memberNode->bFailed)
-    {
-      return false;
+int MP1Node::recvLoop() {
+    if ( memberNode->bFailed ) {
+    	return false;
     }
-  else
-    {
-      return emulNet->ENrecv (&(memberNode->addr), enqueueWrapper, NULL, 1,
-			      &(memberNode->mp1q));
+    else {
+    	return emulNet->ENrecv(&(memberNode->addr), enqueueWrapper, NULL, 1, &(memberNode->mp1q));
     }
 }
 
@@ -70,11 +52,9 @@ MP1Node::recvLoop ()
  *
  * DESCRIPTION: Enqueue the message from Emulnet into the queue
  */
-int
-MP1Node::enqueueWrapper (void *env, char *buff, int size)
-{
-  Queue q;
-  return q.enqueue ((queue<q_elt> *) env, (void *) buff, size);
+int MP1Node::enqueueWrapper(void *env, char *buff, int size) {
+	Queue q;
+	return q.enqueue((queue<q_elt> *)env, (void *)buff, size);
 }
 
 /**
@@ -84,31 +64,27 @@ MP1Node::enqueueWrapper (void *env, char *buff, int size)
  * 				All initializations routines for a member.
  * 				Called by the application layer.
  */
-void
-MP1Node::nodeStart (char *servaddrstr, short servport)
-{
-  Address joinaddr;
-  joinaddr = getJoinAddress ();
+void MP1Node::nodeStart(char *servaddrstr, short servport) {
+    Address joinaddr;
+    joinaddr = getJoinAddress();
 
-  // Self booting routines
-  if (initThisNode (&joinaddr) == -1)
-    {
+    // Self booting routines
+    if( initThisNode(&joinaddr) == -1 ) {
 #ifdef DEBUGLOG
-      log->LOG (&memberNode->addr, "init_thisnode failed. Exit.");
+        log->LOG(&memberNode->addr, "init_thisnode failed. Exit.");
 #endif
-      exit (1);
+        exit(1);
     }
 
-  if (!introduceSelfToGroup (&joinaddr))
-    {
-      finishUpThisNode ();
+    if( !introduceSelfToGroup(&joinaddr) ) {
+        finishUpThisNode();
 #ifdef DEBUGLOG
-      log->LOG (&memberNode->addr, "Unable to join self to group. Exiting.");
+        log->LOG(&memberNode->addr, "Unable to join self to group. Exiting.");
 #endif
-      exit (1);
+        exit(1);
     }
 
-  return;
+    return;
 }
 
 /**
@@ -116,28 +92,24 @@ MP1Node::nodeStart (char *servaddrstr, short servport)
  *
  * DESCRIPTION: Find out who I am and start up
  */
-int
-MP1Node::initThisNode (Address *joinaddr)
-{
-  /*
-   * This function is partially implemented and may require changes
-   */
-  int id = *(int*) (&memberNode->addr.addr);
-  int port = *(short*) (&memberNode->addr.addr[4]);
+int MP1Node::initThisNode(Address *joinaddr) {
+	/*
+	 * This function is partially implemented and may require changes
+	 */
+	int id = *(int*)(&memberNode->addr.addr);
+	int port = *(short*)(&memberNode->addr.addr[4]);
 
-  timestamp = 0;
+	memberNode->bFailed = false;
+	memberNode->inited = true;
+	memberNode->inGroup = false;
+    // node is up!
+	memberNode->nnb = 0;
+	memberNode->heartbeat = 0;
+	memberNode->pingCounter = TFAIL;
+	memberNode->timeOutCounter = -1;
+    initMemberListTable(memberNode);
 
-  memberNode->bFailed = false;
-  memberNode->inited = true;
-  memberNode->inGroup = false;
-  // node is up!
-  memberNode->nnb = 0;
-  memberNode->heartbeat = 0;
-  memberNode->pingCounter = TFAIL;
-  memberNode->timeOutCounter = -1;
-  initMemberListTable (memberNode, id, port);
-
-  return 0;
+    return 0;
 }
 
 /**
@@ -145,56 +117,42 @@ MP1Node::initThisNode (Address *joinaddr)
  *
  * DESCRIPTION: Join the distributed system
  */
-int
-MP1Node::introduceSelfToGroup (Address *joinaddr)
-{ 
-
+int MP1Node::introduceSelfToGroup(Address *joinaddr) {
+	MessageHdr *msg;
 #ifdef DEBUGLOG
-  static char s[1024];
+    static char s[1024];
 #endif
 
-  if (0
-      == strcmp ((char *) &(memberNode->addr.addr), (char *) &(joinaddr->addr)))
+    if (0
+        == strcmp ((char *) &(memberNode->addr.addr), (char *) &(joinaddr->addr)))
     {
-      // I am the group booter (first process to join the group). Boot up the group
+        // I am the group booter (first process to join the group). Boot up the group
 #ifdef DEBUGLOG
-      log->LOG (&memberNode->addr, "Starting up group...");
+        log->LOG (&memberNode->addr, "Starting up group...");
 #endif
-      memberNode->inGroup = true;
+        memberNode->inGroup = true;
     }
-  else
-    {
+    else {
+        size_t msgsize = sizeof(MessageHdr) + sizeof(joinaddr->addr) + sizeof(long) + 1;
+        msg = (MessageHdr *) malloc(msgsize * sizeof(char));
+
+        // create JOINREQ message: format of data is {struct Address myaddr}
+        msg->msgType = JOINREQ;
+        memcpy((char *)(msg+1), &memberNode->addr.addr, sizeof(memberNode->addr.addr));
+        memcpy((char *)(msg+1) + 1 + sizeof(memberNode->addr.addr), &memberNode->heartbeat, sizeof(long));
 
 #ifdef DEBUGLOG
-      sprintf (s, "Trying to join...");
-      log->LOG (&memberNode->addr, s);
+        sprintf(s, "Trying to join...");
+        log->LOG(&memberNode->addr, s);
 #endif
 
-      // send JOINREQ message to introducer member
-      //create header
-      MessageHdr* header = new MessageHdr;
-      header->msgType = JOINREQ;
+        // send JOINREQ message to introducer member
+        emulNet->ENsend(&memberNode->addr, joinaddr, (char *)msg, msgsize);
 
-      //create message
-      Message* msg = new Message;
-      msg->sender = memberNode->addr;
-      msg->heartbeat = memberNode->heartbeat;
-      msg->sizePiggyBack = 0;
-
-      //serialize message
-      char data[sizeof(MessageHdr) + sizeof(Message)];
-      memcpy ((char*) (data), header, sizeof(MessageHdr));
-      memcpy ((char*) (data + sizeof(MessageHdr)), msg, sizeof(Message));
-
-      emulNet->ENsend (&memberNode->addr, joinaddr, data,
-		       sizeof(Message) + sizeof(MessageHdr));
-
-      free (msg);
-      free (header);
-
+        free(msg);
     }
 
-  return 1;
+    return 1;
 
 }
 
@@ -203,12 +161,10 @@ MP1Node::introduceSelfToGroup (Address *joinaddr)
  *
  * DESCRIPTION: Wind up this node and clean up state
  */
-int
-MP1Node::finishUpThisNode ()
-{
-  /*
-   * Your code goes here
-   */
+int MP1Node::finishUpThisNode(){
+   /*
+    * Your code goes here
+    */
 }
 
 /**
@@ -217,29 +173,23 @@ MP1Node::finishUpThisNode ()
  * DESCRIPTION: Executed periodically at each member
  * 				Check your messages in queue and perform membership protocol duties
  */
-void
-MP1Node::nodeLoop ()
-{
-  if (memberNode->bFailed)
-    {
-      return;
+void MP1Node::nodeLoop() {
+    if (memberNode->bFailed) {
+    	return;
     }
 
-  timestamp++;
+    // Check my messages
+    checkMessages();
 
-  // Check my messages
-  checkMessages ();
-
-  // Wait until you're in the group...
-  if (!memberNode->inGroup)
-    {
-      return;
+    // Wait until you're in the group...
+    if( !memberNode->inGroup ) {
+    	return;
     }
 
-  // ...then jump in and share your responsibilites!
-  nodeLoopOps ();
+    // ...then jump in and share your responsibilites!
+    nodeLoopOps();
 
-  return;
+    return;
 }
 
 /**
@@ -247,123 +197,32 @@ MP1Node::nodeLoop ()
  *
  * DESCRIPTION: Check messages in the queue and call the respective message handler
  */
-void
-MP1Node::checkMessages ()
-{
-  void *ptr;
-  int size;
+void MP1Node::checkMessages() {
+    void *ptr;
+    int size;
 
-  // Pop waiting messages from memberNode's mp1q
-  while (!memberNode->mp1q.empty ())
-    {
-      ptr = memberNode->mp1q.front ().elt;
-      size = memberNode->mp1q.front ().size;
-      memberNode->mp1q.pop ();
-      recvCallBack ((void *) memberNode, (char *) ptr, size);
+    // Pop waiting messages from memberNode's mp1q
+    while ( !memberNode->mp1q.empty() ) {
+    	ptr = memberNode->mp1q.front().elt;
+    	size = memberNode->mp1q.front().size;
+    	memberNode->mp1q.pop();
+    	recvCallBack((void *)memberNode, (char *)ptr, size);
     }
-  return;
+    return;
 }
 
 /**
  * FUNCTION NAME: recvCallBack
  *
- * DESCRIPTION: Message handler for different message typesiNumber
+ * DESCRIPTION: Message handler for different message types
  */
-bool
-MP1Node::recvCallBack (void *env, char *data, int size)
-{
-  /*
-   * Your code goes here
-   */
-  char* header = (char*) malloc (sizeof(MessageHdr));
-  memcpy (header, data, sizeof(MessageHdr));
-  MessageHdr* h = reinterpret_cast<MessageHdr*> (header);
-  char* msg = (char*) malloc (size - sizeof(MessageHdr));
-  memcpy (msg, data + sizeof(MessageHdr), size - sizeof(MessageHdr));
-  Message* m = reinterpret_cast<Message*> (msg);
-  if (h->msgType == JOINREQ)
-    {
-      this->handleJoinRequest (m);
-    }
-  else if (h->msgType == JOINREP)
-    {
-      this->handleJoinResponse (m);
-    }
+bool MP1Node::recvCallBack(void *env, char *data, int size ) {
 
-  return true;
-}
-
-//Handle JoinResponseMessage
-void
-MP1Node::handleJoinResponse (Message* msg)
-{
-  //add first node to membership list
-  memberOffset = addToMemberShipList (&msg->sender, msg->heartbeat, timestamp,
-				      ALIVE);
-
-  Event event = msg->piggyBack0;
-  addToUpdatesList (&(*memberOffset), &event);
-
-  //mark node as Joined
-  memberNode->inGroup = true;
-}
-
-//Handle JoinRequestMessage
-void
-MP1Node::handleJoinRequest (Message* msg)
-{
-
-  //add Joiner node to membership list
-  memberOffset = addToMemberShipList (&msg->sender, msg->heartbeat, timestamp,
-				      ALIVE);
-
-  Event* event = new Event;
-  event->type = JOINED;
-  event->target = msg->sender;
-  event->claimed = memberNode->addr;
-  event->claimer = memberNode->addr;
-  event->incarnation = 0;
-  addToUpdatesList (&(*memberOffset), event);
-
-  //create response message
-  MessageHdr* header = new MessageHdr;
-  header->msgType = JOINREP;
-
-  //create message
-  Message* msgBack = new Message;
-  msgBack->sender = memberNode->addr;
-  msgBack->heartbeat = memberNode->heartbeat;
-  msgBack->piggyBack0 = *event;
-  msgBack->sizePiggyBack++;
-
-  //serialize message
-  char data[sizeof(MessageHdr) + sizeof(Message)];
-  memcpy ((char*) (data), header, sizeof(MessageHdr));
-  memcpy ((char*) (data + sizeof(MessageHdr)), msg, sizeof(Message));
-
-  emulNet->ENsend (&memberNode->addr, &msg->sender, data,
-		   sizeof(Message) + sizeof(MessageHdr));
-
-  free (msgBack);
-  free (header);
-
-}
-
-std::vector<MemberSwimListEntry>::iterator
-MP1Node::addToMemberShipList (Address* address, long hbeat, long timestamp,
-			      Status status)
-{
-  MemberSwimListEntry* entry = new MemberSwimListEntry (address, hbeat,
-							timestamp, status, 0);
-  return memberShipList->list.insert (memberShipList->list.end (), *entry);
-}
-
-EventListEntry*
-MP1Node::addToUpdatesList (MemberSwimListEntry* member, Event* event)
-{
-  EventListEntry* entry = new EventListEntry (member, event);
-  updatesNodes->list.insert (updatesNodes->list.end (), *entry);
-  return entry;
+	MessageHdr* header = reinterpret_cast<MessageHdr*>(data);
+	Address* sender = reinterpret_cast<Address*>(data+sizeof(MessageHdr));
+	long* heartbeat = reinterpret_cast<long*>(data+sizeof(MessageHdr)+sizeof(Address));
+	cout<<"request from "<<sender->getAddress() << "at" << *heartbeat<< endl;
+	return true;
 }
 
 /**
@@ -373,23 +232,13 @@ MP1Node::addToUpdatesList (MemberSwimListEntry* member, Event* event)
  * 				the nodes
  * 				Propagate your membership list
  */
-void
-MP1Node::nodeLoopOps ()
-{
+void MP1Node::nodeLoopOps() {
 
-  /*
-   * Your code goes here
-   */
+	/*
+	 * Your code goes here
+	 */
 
-  //select k nodes for ping
-  int members = this->memberShipList->list.size ();
-  for (int i = 0; i < kRamdomProcesses && i<members; i++)
-    {
-
-
-    }
-
-  return;
+    return;
 }
 
 /**
@@ -397,10 +246,8 @@ MP1Node::nodeLoopOps ()
  *
  * DESCRIPTION: Function checks if the address is NULL
  */
-int
-MP1Node::isNullAddress (Address *addr)
-{
-  return (memcmp (addr->addr, NULLADDR, 6) == 0 ? 1 : 0);
+int MP1Node::isNullAddress(Address *addr) {
+	return (memcmp(addr->addr, NULLADDR, 6) == 0 ? 1 : 0);
 }
 
 /**
@@ -408,16 +255,14 @@ MP1Node::isNullAddress (Address *addr)
  *
  * DESCRIPTION: Returns the Address of the coordinator
  */
-Address
-MP1Node::getJoinAddress ()
-{
-  Address joinaddr;
+Address MP1Node::getJoinAddress() {
+    Address joinaddr;
 
-  memset (&joinaddr, 0, sizeof(Address));
-  *(int *) (&joinaddr.addr) = 1;
-  *(short *) (&joinaddr.addr[4]) = 0;
+    memset(&joinaddr, 0, sizeof(Address));
+    *(int *)(&joinaddr.addr) = 1;
+    *(short *)(&joinaddr.addr[4]) = 0;
 
-  return joinaddr;
+    return joinaddr;
 }
 
 /**
@@ -425,17 +270,8 @@ MP1Node::getJoinAddress ()
  *
  * DESCRIPTION: Initialize the membership list
  */
-void
-MP1Node::initMemberListTable (Member *memberNode, int id, short port)
-{
-  memberNode->memberList.clear ();
-  Address addr;
-  memset (&addr, 0, sizeof(Address));
-  *(int *) (&addr.addr) = id;
-  *(short *) (&addr.addr[4]) = port;
-
-  memberShipList->myPos = addToMemberShipList (&addr, this->memberNode->heartbeat,
-					   timestamp, ALIVE);
+void MP1Node::initMemberListTable(Member *memberNode) {
+	memberNode->memberList.clear();
 }
 
 /**
@@ -443,152 +279,8 @@ MP1Node::initMemberListTable (Member *memberNode, int id, short port)
  *
  * DESCRIPTION: Print the Address
  */
-void
-MP1Node::printAddress (Address *addr)
+void MP1Node::printAddress(Address *addr)
 {
-  printf ("%d.%d.%d.%d:%d \n", addr->addr[0], addr->addr[1], addr->addr[2],
-	  addr->addr[3], *(short*) &addr->addr[4]);
-}
-
-MembershipList::MembershipList ()
-{
-
-}
-
-MembershipList::~MembershipList ()
-{
-
-}
-
-EventList::EventList ()
-{
-
-}
-
-EventList::~EventList ()
-{
-
-}
-
-MemberSwimListEntry::MemberSwimListEntry (Address* address, int heartbeat,
-					  long timestamp, Status status,
-					  int incarnation)
-{
-  this->address = address;
-  this->heartbeat = heartbeat;
-  this->timestamp = timestamp;
-  this->status = status;
-  this->incarnation = incarnation;
-}
-
-long
-MemberSwimListEntry::getHeartbeat () const
-{
-  return heartbeat;
-}
-
-void
-MemberSwimListEntry::setHeartbeat (long heartbeat)
-{
-  this->heartbeat = heartbeat;
-}
-
-int
-MemberSwimListEntry::getIncarnation () const
-{
-  return incarnation;
-}
-
-void
-MemberSwimListEntry::setIncarnation (int incarnation)
-{
-  this->incarnation = incarnation;
-}
-
-Status
-MemberSwimListEntry::getStatus () const
-{
-  return status;
-}
-
-void
-MemberSwimListEntry::setStatus (Status status)
-{
-  this->status = status;
-}
-
-long
-MemberSwimListEntry::getTimestamp () const
-{
-  return timestamp;
-}
-
-Address*
-MemberSwimListEntry::getAddress () const
-{
-  return address;
-}
-
-void
-MemberSwimListEntry::setAddress (Address* address)
-{
-  this->address = address;
-}
-
-void
-MemberSwimListEntry::setTimestamp (long timestamp)
-{
-  this->timestamp = timestamp;
-}
-
-MemberSwimListEntry::~MemberSwimListEntry ()
-{
-}
-
-EventListEntry::EventListEntry (MemberSwimListEntry* member, Event* event)
-{
-  this->member = member;
-  this->event = event;
-  this->goshiped = 0;
-
-}
-
-const Event*
-EventListEntry::getEvent () const
-{
-  return event;
-}
-
-void
-EventListEntry::setEvent (const Event* event)
-{
-  this->event = event;
-}
-
-int
-EventListEntry::getGoshiped () const
-{
-  return goshiped;
-}
-
-void
-EventListEntry::setGoshiped (int goshiped)
-{
-  this->goshiped = goshiped;
-}
-
-const MemberSwimListEntry*
-EventListEntry::getMember () const
-{
-  return member;
-}
-
-void
-EventListEntry::setMember (const MemberSwimListEntry* member)
-{
-  this->member = member;
-}
-
-EventListEntry::~EventListEntry ()
-{
+    printf("%d.%d.%d.%d:%d \n",  addr->addr[0],addr->addr[1],addr->addr[2],
+                                                       addr->addr[3], *(short*)&addr->addr[4]) ;    
 }

@@ -293,7 +293,7 @@ MP1Node::recvCallBack (void *env, char *data, int size)
     }
   else if (header->msgType == GOSSIP)
     {
-      cout << "updating menberlist of node" << memberNode->addr.getAddress () << endl;
+      cout << "updating menberlist of node " << memberNode->addr.getAddress () << endl;
       for (std::vector<MemberListEntry>::iterator it = memberNode->memberList.begin (); it != memberNode->memberList.end (); ++it)
 	{
 	  Address address = parseAddress ((*it).id, (*it).port);
@@ -314,17 +314,21 @@ MP1Node::recvCallBack (void *env, char *data, int size)
 	    }
 
 	}
-      cout << "searching failed nodes in menberlist of node" << memberNode->addr.getAddress () << endl;
+      cout << "searching failed nodes in menberlist of node " << memberNode->addr.getAddress () << endl;
       for (std::vector<MemberListEntry>::iterator it = memberNode->memberList.begin (); it != memberNode->memberList.end (); ++it)
 	{
 	  int timeout = par->getcurrtime () - (*it).timestamp;
-	  if (timeout >= 40)
+	  if (timeout >= 20)
 	    {
-	      //send failed messages
+	      //add to failed list
+	      //broadcast failed messages
+
 	    }
-	  else if (timeout >= 80)
+	  else if (timeout >= 40)
 	    {
+	      //check if in failed list,
 	      //delete from memberlist
+	      //else -> add to failed list send messages
 	    }
 	}
 
@@ -429,8 +433,13 @@ MP1Node::gossip ()
 void
 MP1Node::nodeLoopOps ()
 {
-  gossip ();
   memberNode->heartbeat++;
+  MemberListEntry self = *memberNode->myPos;
+  self.timestamp = par->getcurrtime();
+  self.heartbeat = memberNode->heartbeat;
+
+  gossip ();
+
   return;
 }
 
@@ -482,6 +491,7 @@ MP1Node::initMemberListTable (Member *memberNode, int id, int port)
   memberNode->memberList.clear ();
   MemberListEntry* myself = new MemberListEntry (id, port, memberNode->heartbeat, par->getcurrtime ());
   memberNode->memberList.insert (memberNode->memberList.end (), *myself);
+  memberNode->myPos = memberNode->memberList.end();
 }
 
 /**

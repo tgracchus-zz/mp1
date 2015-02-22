@@ -320,7 +320,7 @@ MP1Node::recvCallBack (void *env, char *data, int size)
 	  int timeout = par->getcurrtime () - (*it).timestamp;
 	  if (timeout >= 20)
 	    {
-	      //add to failed list
+	      failedNodes.insert(failedNodes.begin(),(*it).id);
 	      //broadcast failed messages
 
 	    }

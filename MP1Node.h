@@ -57,6 +57,7 @@ private:
 	Member *memberNode;
 	int k;
 	char NULLADDR[6];
+	std::vector<int> failedNodes;
 
 public:
 	MP1Node(Member *, Params *, EmulNet *, Log *, Address *);

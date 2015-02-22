@@ -81,6 +81,7 @@ public:
 	void createMessage(MsgTypes type,MessageHdr* msg);
 	void fillMemberList(MessageHdr* msg);
 	Address parseAddress(int id, int port);
+	void gossip();
 };
 
 #endif /* _MP1NODE_H_ */

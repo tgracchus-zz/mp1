@@ -290,6 +290,10 @@ MP1Node::recvCallBack (void *env, char *data, int size)
       memberNode->inGroup = true;
 
     }
+  else if (header->msgType == GOSSIP)
+    {
+      cout << "gossip" << (memberNode->heartbeat) << endl;
+    }
 
   return true;
 }
@@ -323,9 +327,8 @@ MP1Node::fillMemberList (MessageHdr* msg)
  * 				Propagate your membership list
  */
 void
-MP1Node::nodeLoopOps ()
+MP1Node::gossip ()
 {
-
   //Select random menbers to send gosip
   if (k + 1 >= memberNode->memberList.size ())
     {
@@ -365,7 +368,7 @@ MP1Node::nodeLoopOps ()
 		  MessageHdr* msg = (MessageHdr *) malloc (msgsize * sizeof(char));
 		  this->createMessage (GOSSIP, msg);
 		  this->fillMemberList (msg);
-		  emulNet->ENsend (&memberNode->addr, &address, (char *) (&msg), msgsize);
+		  emulNet->ENsend (&memberNode->addr, &address, (char *) msg, msgsize);
 		  free (msg);
 		}
 	      selected = selected + 1;
@@ -376,8 +379,13 @@ MP1Node::nodeLoopOps ()
 	}
 
     }
+}
 
-
+void
+MP1Node::nodeLoopOps ()
+{
+  gossip ();
+  memberNode->heartbeat++;
   return;
 }
 

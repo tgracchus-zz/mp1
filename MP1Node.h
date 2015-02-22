@@ -28,10 +28,8 @@
 /**
  * Message Types
  */
-enum MsgTypes{
-    JOINREQ,
-    JOINREP,
-    DUMMYLASTMSGTYPE
+enum MsgTypes {
+	JOINREQ, JOINREP, GOSSIP,DUMMYLASTMSGTYPE
 };
 
 /**
@@ -44,7 +42,7 @@ typedef struct MessageHdr {
 	Address sender;
 	long heartbeat;
 	int memberSize;
-}MessageHdr;
+} MessageHdr;
 
 /**
  * CLASS NAME: MP1Node
@@ -57,6 +55,7 @@ private:
 	Log *log;
 	Params *par;
 	Member *memberNode;
+	int k;
 	char NULLADDR[6];
 
 public:
@@ -76,9 +75,12 @@ public:
 	void nodeLoopOps();
 	int isNullAddress(Address *addr);
 	Address getJoinAddress();
-	void initMemberListTable(Member *memberNode);
+	void initMemberListTable(Member *memberNode, int id, int port);
 	void printAddress(Address *addr);
 	virtual ~MP1Node();
+	void createMessage(MsgTypes type,MessageHdr* msg);
+	void fillMemberList(MessageHdr* msg);
+	Address parseAddress(int id, int port);
 };
 
 #endif /* _MP1NODE_H_ */

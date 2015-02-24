@@ -270,6 +270,9 @@ MP1Node::recvCallBack (void *env, char *data, int size)
       MemberListEntry entry (id, port, header->heartbeat, par->getcurrtime ());
       memberNode->memberList.push_back (entry);
 
+      Address address = parseAddress (id, port);
+      log->logNodeAdd (&memberNode->addr, &address);
+
       // create JOINREQP message
       size_t msgsize = sizeof(MessageHdr) + (memberNode->memberList.size () * sizeof(MemberListEntry));
       MessageHdr* JOINRPMSG = (MessageHdr *) malloc (msgsize * sizeof(char));
@@ -286,6 +289,8 @@ MP1Node::recvCallBack (void *env, char *data, int size)
       for (std::vector<MemberListEntry>::iterator it = goshiped.begin (); it != goshiped.end (); ++it)
 	{
 	  memberNode->memberList.push_back (*it);
+	  Address address = parseAddress (it->id, it->port);
+	  log->logNodeAdd (&memberNode->addr, &address);
 	}
 
       memberNode->inGroup = true;
@@ -293,6 +298,7 @@ MP1Node::recvCallBack (void *env, char *data, int size)
     }
   else if (header->msgType == GOSSIP)
     {
+
       cout << "updating menberlist of node " << memberNode->addr.getAddress () << endl;
       bool found = false;
       for (std::vector<MemberListEntry>::iterator goss = goshiped.begin (); goss != goshiped.end (); ++goss)
@@ -300,17 +306,18 @@ MP1Node::recvCallBack (void *env, char *data, int size)
 	  for (std::vector<MemberListEntry>::iterator it = memberNode->memberList.begin (); it != memberNode->memberList.end (); ++it)
 	    {
 	      Address address = parseAddress (it->id, it->port);
-	      if (!(address == memberNode->addr))
+	      if (!(address == memberNode->addr) && it->id == goss->id)
 		{
-		  if (it->id == goss->id)
+
+		  found = true;
+		  if (it->heartbeat < goss->heartbeat)
 		    {
-		      found = true;
-		      if (it->heartbeat < goss->heartbeat)
-			{
-			  it->timestamp = par->getcurrtime ();
-			  it->heartbeat = goss->heartbeat;
-			}
+		      cout << "updating node entry " << goss->id << " with " << goss->heartbeat << " heartbeat of node "
+			  << memberNode->addr.getAddress () << endl;
+		      it->timestamp = par->getcurrtime ();
+		      it->heartbeat = goss->heartbeat;
 		    }
+
 		}
 
 	    }
@@ -320,8 +327,11 @@ MP1Node::recvCallBack (void *env, char *data, int size)
 	      Address address = parseAddress (goss->id, goss->port);
 	      if (!(address == memberNode->addr))
 		{
-		  goss->timestamp = par->getcurrtime ();
-		  memberNode->memberList.push_back (*goss);
+		  MemberListEntry entry (*goss);
+		  entry.timestamp = par->getcurrtime ();
+		  memberNode->memberList.push_back (entry);
+		  Address address = parseAddress (id, port);
+		  log->logNodeAdd (&memberNode->addr, &address);
 		}
 	    }
 
@@ -332,41 +342,70 @@ MP1Node::recvCallBack (void *env, char *data, int size)
       for (std::vector<MemberListEntry>::iterator fail = memberNode->memberList.begin (); fail != memberNode->memberList.end (); ++fail)
 	{
 	  int timeout = par->getcurrtime () - fail->timestamp;
-	  if (timeout >= 40)
+
+	  for (std::vector<int>::iterator failedNode = failedNodes.begin (); failedNode != failedNodes.end (); ++failedNode)
 	    {
-
-	      //add to failed nodes
-	      cout << "detected failed node  " << fail->id << " at " << memberNode->addr.getAddress () << endl;
-	      failedNodes.push_back (fail->id);
-	      //broadcast failed messages
-	      for (std::vector<MemberListEntry>::iterator msgit = memberNode->memberList.begin (); msgit != memberNode->memberList.end ();
-		  ++msgit)
+	      if (*failedNode == fail->id)
 		{
-		  if (msgit->id != fail->id)
+		  if (timeout >= 100)
 		    {
-		      size_t msgsize = sizeof(MessageHdr) + sizeof(MemberListEntry);
-		      MessageHdr* FAILMSG = (MessageHdr *) malloc (msgsize * sizeof(char));
-		      this->createMessage (FAIL, FAILMSG, 1);
 
-		      Address address = parseAddress (msgit->id, msgit->port);
-		      if (!(address == memberNode->addr))
+		      //add to failed nodes
+		      cout << "detected failed node  " << fail->id << " at " << memberNode->addr.getAddress () << endl;
+		      failedNodes.push_back (fail->id);
+		      //broadcast failed messages
+		      for (std::vector<MemberListEntry>::iterator msgit = memberNode->memberList.begin ();
+			  msgit != memberNode->memberList.end (); ++msgit)
 			{
-			  memcpy (((char*) FAILMSG + sizeof(MessageHdr)), &(msgit), sizeof(MemberListEntry));
-			  emulNet->ENsend (&memberNode->addr, &address, (char *) FAILMSG, msgsize);
-			  cout << "sending " << FAILMSG->msgType << " from " << memberNode->addr.getAddress () << " to "
-			      << address.getAddress () << " with heartbeat " << FAILMSG->heartbeat << endl;
-			  free (FAILMSG);
+			  if (msgit->id != fail->id)
+			    {
+			      size_t msgsize = sizeof(MessageHdr) + sizeof(MemberListEntry);
+			      MessageHdr* FAILMSG = (MessageHdr *) malloc (msgsize * sizeof(char));
+			      this->createMessage (FAIL, FAILMSG, 1);
+
+			      Address address = parseAddress (msgit->id, msgit->port);
+			      if (!(address == memberNode->addr))
+				{
+				  memcpy (((char*) FAILMSG + sizeof(MessageHdr)), &(msgit), sizeof(MemberListEntry));
+				  emulNet->ENsend (&memberNode->addr, &address, (char *) FAILMSG, msgsize);
+				  /*cout << "sending " << FAILMSG->msgType << " from " << memberNode->addr.getAddress () << " to "
+				   << address.getAddress () << " with heartbeat " << FAILMSG->heartbeat << endl;*/
+				  free (FAILMSG);
+				}
+			    }
 			}
+
+		    }
+		  else if (timeout >= 200)
+		    {
+		      //delete from memberlist
+		      failedNodes.erase (failedNode);
+		      memberNode->memberList.erase (fail);
+		      Address address = parseAddress (fail->id, fail->port);
+		      log->logNodeRemove (&memberNode->addr, &address);
+
 		    }
 		}
 
 	    }
-	  else if (timeout >= 80)
+
+	}
+
+    }
+  else if (header->msgType == FAIL)
+    {
+      bool present = false;
+      for (std::vector<int>::iterator failedNode = failedNodes.begin (); failedNode != failedNodes.end () && !present; ++failedNode)
+	{
+	  if (*failedNode == goshiped.begin ()->id)
 	    {
-	      //check if in failed list,
-	      //delete from memberlist
-	      //else -> add to failed list send messages
+	      present = true;
 	    }
+
+	}
+      if (!present)
+	{
+	  failedNodes.push_back (goshiped.begin ()->id);
 	}
 
     }
@@ -394,8 +433,6 @@ MP1Node::fillMemberList (MessageHdr* msg)
       i++;
     }
 }
-
-
 
 /**
  * FUNCTION NAME: nodeLoopOps
@@ -474,11 +511,12 @@ MP1Node::nodeLoopOps ()
   //update heartbeat
   memberNode->heartbeat++;
 
+  //make sure
   //update my menber entry
   cout << "nodeLoopOps at node " << memberNode->addr.getAddress () << endl;
-  MemberListEntry self = (*memberNode->myPos);
-  self.timestamp = par->getcurrtime ();
-  self.heartbeat = memberNode->heartbeat;
+  memberNode->myPos = memberNode->memberList.begin ();
+  memberNode->myPos->timestamp = par->getcurrtime ();
+  memberNode->myPos->heartbeat = memberNode->heartbeat;
 
   gossip ();
 
@@ -533,6 +571,7 @@ MP1Node::initMemberListTable (Member *memberNode, int id, int port)
   memberNode->memberList.clear ();
   MemberListEntry myself (id, port, memberNode->heartbeat, par->getcurrtime ());
   memberNode->memberList.push_back (myself);
+  log->logNodeAdd (&memberNode->addr, &memberNode->addr);
   memberNode->myPos = memberNode->memberList.begin ();
 }
 

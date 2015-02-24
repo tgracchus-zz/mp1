@@ -351,8 +351,7 @@ MP1Node::recvCallBack (void *env, char *data, int size)
 		      Address address = parseAddress (msgit->id, msgit->port);
 		      if (!(address == memberNode->addr))
 			{
-			  MemberListEntry entry = *msgit;
-			  memcpy (((char*) FAILMSG + sizeof(MessageHdr)), &entry, sizeof(MemberListEntry));
+			  memcpy (((char*) FAILMSG + sizeof(MessageHdr)), &(msgit), sizeof(MemberListEntry));
 			  emulNet->ENsend (&memberNode->addr, &address, (char *) FAILMSG, msgsize);
 			  cout << "sending " << FAILMSG->msgType << " from " << memberNode->addr.getAddress () << " to "
 			      << address.getAddress () << " with heartbeat " << FAILMSG->heartbeat << endl;

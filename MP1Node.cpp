@@ -352,7 +352,7 @@ MP1Node::recvCallBack (void *env, char *data, int size)
 		      if (!(address == memberNode->addr))
 			{
 			  MemberListEntry entry = *msgit;
-			  this->addEntry (&entry, FAILMSG);
+			  memcpy (((char*) FAILMSG + sizeof(MessageHdr)), &entry, sizeof(MemberListEntry));
 			  emulNet->ENsend (&memberNode->addr, &address, (char *) FAILMSG, msgsize);
 			  cout << "sending " << FAILMSG->msgType << " from " << memberNode->addr.getAddress () << " to "
 			      << address.getAddress () << " with heartbeat " << FAILMSG->heartbeat << endl;
@@ -396,14 +396,7 @@ MP1Node::fillMemberList (MessageHdr* msg)
     }
 }
 
-void
-MP1Node::addEntry (MemberListEntry* it, MessageHdr* msg)
-{
 
-  MemberListEntry entry = *it;
-  memcpy (((char*) msg + sizeof(MessageHdr) + (sizeof(MemberListEntry))), &entry, sizeof(MemberListEntry));
-
-}
 
 /**
  * FUNCTION NAME: nodeLoopOps

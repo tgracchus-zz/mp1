@@ -81,7 +81,6 @@ public:
 	virtual ~MP1Node();
 	void createMessage(MsgTypes type,MessageHdr* msg,int messages);
 	void fillMemberList(MessageHdr* msg);
-	void addEntry (MemberListEntry* it,MessageHdr* msg);
 	Address parseAddress(int id, int port);
 	void gossip();
 };

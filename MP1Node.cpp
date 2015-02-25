@@ -316,6 +316,7 @@ MP1Node::recvCallBack (void *env, char *data, int size)
 			  << memberNode->addr.getAddress () << endl;
 		      it->timestamp = par->getcurrtime ();
 		      it->heartbeat = goss->heartbeat;
+		      log->logNodeAdd (&memberNode->addr, &address);
 		    }
 
 		}

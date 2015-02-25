@@ -7,6 +7,16 @@
 
 #include "MP1Node.h"
 
+#include <sys/_types/_size_t.h>
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
+#include <iterator>
+#include <queue>
+#include <vector>
+
 /*
  * Note: You can change/add any functions in MP1Node.{h,cpp}
  */
@@ -27,7 +37,7 @@ MP1Node::MP1Node (Member *member, Params *params, EmulNet *emul, Log *log, Addre
   this->log = log;
   this->par = params;
   this->memberNode->addr = *address;
-  k = 4;
+  k = 3;
 }
 
 /**
@@ -228,6 +238,7 @@ MP1Node::checkMessages ()
   void *ptr;
   int size;
 
+  cout << "----------- START CHECK MESSAGESS:" << memberNode->addr.getAddress () <<" -------------------"<< endl;
   // Pop waiting messages from memberNode's mp1q
   while (!memberNode->mp1q.empty ())
     {
@@ -249,13 +260,12 @@ MP1Node::recvCallBack (void *env, char *data, int size)
 {
 
   MessageHdr* header = reinterpret_cast<MessageHdr*> (data);
-  cout << "request " << header->msgType << " from " << header->sender.getAddress () << " to " << memberNode->addr.getAddress ()
-      << " with heartbeat " << header->heartbeat << endl;
   //get id,port
   int id = 0;
   short port;
   memcpy (&id, &header->sender.addr, sizeof(int));
   memcpy (&port, &header->sender.addr[4], sizeof(short));
+
   //get goshipedlist
   std::vector<MemberListEntry> goshiped;
   for (int i = 0; i < header->memberSize; i++)
@@ -266,9 +276,11 @@ MP1Node::recvCallBack (void *env, char *data, int size)
 
   if (header->msgType == JOINREQ)
     {
+      cout << "JOINREQ  from " << header->sender.getAddress () << " to " << memberNode->addr.getAddress () << " with heartbeat "
+	  << header->heartbeat << endl;
       //add to membershiplist
       MemberListEntry entry (id, port, header->heartbeat, par->getcurrtime ());
-      memberNode->memberList.push_back (entry);
+      updateMember (&entry);
 
       Address address = parseAddress (id, port);
       log->logNodeAdd (&memberNode->addr, &address);
@@ -285,120 +297,28 @@ MP1Node::recvCallBack (void *env, char *data, int size)
     }
   else if (header->msgType == JOINREP)
     {
-
-      for (std::vector<MemberListEntry>::iterator it = goshiped.begin (); it != goshiped.end (); ++it)
-	{
-	  memberNode->memberList.push_back (*it);
-	  Address address = parseAddress (it->id, it->port);
-	  log->logNodeAdd (&memberNode->addr, &address);
-	}
+      cout << "JOINREP from " << header->sender.getAddress () << " to " << memberNode->addr.getAddress () << " with heartbeat "
+	  << header->heartbeat << endl;
+      updateMemberList (&goshiped);
 
       memberNode->inGroup = true;
 
     }
   else if (header->msgType == GOSSIP)
     {
-
-      cout << "updating menberlist of node " << memberNode->addr.getAddress () << endl;
-      bool found = false;
-      for (std::vector<MemberListEntry>::iterator goss = goshiped.begin (); goss != goshiped.end (); ++goss)
-	{
-	  for (std::vector<MemberListEntry>::iterator it = memberNode->memberList.begin (); it != memberNode->memberList.end (); ++it)
-	    {
-	      Address address = parseAddress (it->id, it->port);
-	      if (!(address == memberNode->addr) && it->id == goss->id)
-		{
-
-		  found = true;
-		  if (it->heartbeat < goss->heartbeat)
-		    {
-		      cout << "updating node entry " << goss->id << " with " << goss->heartbeat << " heartbeat of node "
-			  << memberNode->addr.getAddress () << endl;
-		      it->timestamp = par->getcurrtime ();
-		      it->heartbeat = goss->heartbeat;
-		      log->logNodeAdd (&memberNode->addr, &address);
-		    }
-
-		}
-
-	    }
-
-	  if (!found)
-	    {
-	      Address address = parseAddress (goss->id, goss->port);
-	      if (!(address == memberNode->addr))
-		{
-		  MemberListEntry entry (*goss);
-		  entry.timestamp = par->getcurrtime ();
-		  memberNode->memberList.push_back (entry);
-		  Address address = parseAddress (id, port);
-		  log->logNodeAdd (&memberNode->addr, &address);
-		}
-	    }
-
-	  found = false;
-
-	}
-      cout << "searching failed nodes in menberlist of node " << memberNode->addr.getAddress () << endl;
-      std::vector<MemberListEntry>::iterator updatedMember = memberNode->memberList.begin ();
-      bool deleted = false;
-      while (updatedMember != memberNode->memberList.end ())
-	{
-	  int timeout = par->getcurrtime () - updatedMember->timestamp;
-
-	  if (timeout >= 100)
-	    {
-
-	      if (!isAlreadyFailedNode (updatedMember->id))
-		{
-		  //add to failed nodes
-		  cout << "detected failed node  " << updatedMember->id << " at " << memberNode->addr.getAddress () << endl;
-		  failedNodes.push_back (updatedMember->id);
-
-		  //broadcast failed messages
-		  for (std::vector<MemberListEntry>::iterator msgit = memberNode->memberList.begin ();
-		      msgit != memberNode->memberList.end (); ++msgit)
-		    {
-		      if (msgit->id != updatedMember->id)
-			{
-			  size_t msgsize = sizeof(MessageHdr) + sizeof(MemberListEntry);
-			  MessageHdr* FAILMSG = (MessageHdr *) malloc (msgsize * sizeof(char));
-			  this->createMessage (FAIL, FAILMSG, 1);
-
-			  Address address = parseAddress (msgit->id, msgit->port);
-			  if (!(address == memberNode->addr))
-			    {
-			      memcpy (((char*) FAILMSG + sizeof(MessageHdr)), &(msgit), sizeof(MemberListEntry));
-			      emulNet->ENsend (&memberNode->addr, &address, (char *) FAILMSG, msgsize);
-			      cout << "sending " << FAILMSG->msgType << " from " << memberNode->addr.getAddress () << " to "
-				  << address.getAddress () << " with heartbeat " << FAILMSG->heartbeat << endl;
-			      free (FAILMSG);
-			    }
-			}
-		    }
-
-		}
-	      else if (timeout >= 200)
-		{
-		  cout << "deleting node " << updatedMember->id << " from " << memberNode->addr.getAddress () << endl;
-		  failedNodes.erase (remove (failedNodes.begin (), failedNodes.end (), updatedMember->id), failedNodes.end ());
-		  cout << "deleted node " << updatedMember->id << " from failed at" << memberNode->addr.getAddress () << endl;
-		  memberNode->memberList.erase (updatedMember);
-		  cout << "deleted node " << updatedMember->id << " from members at" << memberNode->addr.getAddress () << endl;
-		  Address address = parseAddress (updatedMember->id, updatedMember->port);
-		  log->logNodeRemove (&memberNode->addr, &address);
-		  deleted = true;
-		}
-	    }
-	  if (!deleted)
-	    {
-	      ++updatedMember;
-	    }
-	  deleted = false;
-	}
+      cout << "GOSSIP from " << header->sender.getAddress () << " to " << memberNode->addr.getAddress () << " with heartbeat "
+	  << header->heartbeat << endl;
+      updateMemberList (&goshiped);
     }
   else if (header->msgType == FAIL)
     {
+
+      cout << "FAIL from " << header->sender.getAddress () << " to " << memberNode->addr.getAddress () << " with heartbeat "
+	  << header->heartbeat << endl;
+
+      MemberListEntry msgEntry (id, port, header->heartbeat, par->getcurrtime ());
+      updateMember (&msgEntry);
+
       bool present = false;
       for (std::vector<int>::iterator failedNode = failedNodes.begin (); failedNode != failedNodes.end () && !present; ++failedNode)
 	{
@@ -416,6 +336,61 @@ MP1Node::recvCallBack (void *env, char *data, int size)
     }
 
   return true;
+}
+
+void
+MP1Node::updateMember (MemberListEntry* goss)
+{
+  bool found = false;
+  for (std::vector<MemberListEntry>::iterator it = memberNode->memberList.begin (); it != memberNode->memberList.end (); ++it)
+    {
+      Address address = parseAddress (it->id, it->port);
+      if (it->id == goss->id)
+	{
+	  found = true;
+	  if (it->heartbeat < goss->heartbeat)
+	    {
+	      cout << "updating node entry " << goss->id << " with " << goss->heartbeat << " heartbeat of node "
+		  << memberNode->addr.getAddress () << endl;
+	      it->timestamp = par->getcurrtime ();
+	      it->heartbeat = goss->heartbeat;
+	      failedNodes.erase (remove (failedNodes.begin (), failedNodes.end (), goss->id), failedNodes.end ());
+	      log->logNodeAdd (&memberNode->addr, &address);
+
+	    }
+
+	}
+
+    }
+
+  if (!found)
+    {
+      Address address = parseAddress (goss->id, goss->port);
+      if (!(address == memberNode->addr))
+	{
+	  MemberListEntry entry (*goss);
+	  entry.timestamp = par->getcurrtime ();
+	  memberNode->memberList.push_back (entry);
+	  cout << "added node entry " << goss->id << " with " << goss->heartbeat << " heartbeat of node " << memberNode->addr.getAddress ()
+	      << endl;
+	  failedNodes.erase (remove (failedNodes.begin (), failedNodes.end (), goss->id), failedNodes.end ());
+	  log->logNodeAdd (&memberNode->addr, &address);
+	}
+    }
+}
+
+void
+MP1Node::updateMemberList (std::vector<MemberListEntry>* goshiped)
+{
+  cout << "updating menberlist of node " << memberNode->addr.getAddress () << endl;
+
+  for (std::vector<MemberListEntry>::iterator goss = goshiped->begin (); goss != goshiped->end (); ++goss)
+    {
+
+      updateMember (&(*goss));
+
+    }
+
 }
 
 bool
@@ -463,6 +438,7 @@ MP1Node::fillMemberList (MessageHdr* msg)
 void
 MP1Node::gossip ()
 {
+  cout << "GOSSIP" << endl;
   //Select random menbers to send gosip
   if (k >= memberNode->memberList.size ())
     {
@@ -500,7 +476,6 @@ MP1Node::gossip ()
 	{
 	  it = memberNode->memberList.begin ();
 	  random = rand () % memberNode->memberList.size ();
-	  cout << "try random" << random << " for size" << memberNode->memberList.size () << endl;
 	  if (selectedTable[random] != 1)
 	    {
 	      it = it + random;
@@ -533,10 +508,65 @@ MP1Node::nodeLoopOps ()
 
   //make sure
   //update my menber entry
-  cout << "nodeLoopOps at node " << memberNode->addr.getAddress () << endl;
+  cout << "------------- START NODE LOOPS: " << memberNode->addr.getAddress () << " -------------------" << endl;
   memberNode->myPos = memberNode->memberList.begin ();
   memberNode->myPos->timestamp = par->getcurrtime ();
   memberNode->myPos->heartbeat = memberNode->heartbeat;
+
+  cout << "FAILURES: searching failed nodes in menberlist of node " << memberNode->addr.getAddress () << endl;
+
+  for (std::vector<MemberListEntry>::iterator updatedMember = memberNode->memberList.begin ();
+      updatedMember != memberNode->memberList.end (); ++updatedMember)
+    {
+
+      cout << "member " << updatedMember->id << updatedMember->port << " at node " << memberNode->addr.getAddress () << endl;
+      int timeout = par->getcurrtime () - updatedMember->timestamp;
+
+      if (timeout >= 10)
+	{
+
+	  if (!isAlreadyFailedNode (updatedMember->id))
+	    {
+	      //add to failed nodes
+	      cout << "detected failed node  " << updatedMember->id << " at " << memberNode->addr.getAddress () << endl;
+	      failedNodes.push_back (updatedMember->id);
+
+	      //broadcast failed messages
+	      for (std::vector<MemberListEntry>::iterator msgit = memberNode->memberList.begin (); msgit != memberNode->memberList.end ();
+		  ++msgit)
+		{
+		  if (msgit->id != updatedMember->id)
+		    {
+
+		      Address address = parseAddress (msgit->id, msgit->port);
+		      size_t msgsize = sizeof(MessageHdr) + sizeof(MemberListEntry);
+		      MessageHdr* FAILMSG = (MessageHdr *) malloc (msgsize * sizeof(char));
+		      this->createMessage (FAIL, FAILMSG, 1);
+
+		      if (!(address == memberNode->addr))
+			{
+			  memcpy (((char*) FAILMSG + sizeof(MessageHdr)), &(msgit), sizeof(MemberListEntry));
+			  emulNet->ENsend (&memberNode->addr, &address, (char *) FAILMSG, msgsize);
+			  cout << "sending " << FAILMSG->msgType << " from " << memberNode->addr.getAddress () << " to "
+			      << address.getAddress () << " with heartbeat " << FAILMSG->heartbeat << endl;
+			  free (FAILMSG);
+			}
+		    }
+		}
+
+	    }
+	  else if (timeout >= 20 && isAlreadyFailedNode (updatedMember->id))
+	    {
+	      Address address = parseAddress (updatedMember->id, updatedMember->port);
+	      log->logNodeRemove (&memberNode->addr, &address);
+	      cout << "deleting node " << updatedMember->id << " from " << memberNode->addr.getAddress () << endl;
+	      failedNodes.erase (remove (failedNodes.begin (), failedNodes.end (), updatedMember->id), failedNodes.end ());
+	      memberNode->memberList.erase (updatedMember);
+	      --updatedMember;
+
+	    }
+	}
+    }
 
   gossip ();
 

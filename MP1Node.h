@@ -102,6 +102,10 @@ public:
   ~MP1Node ();
   void
   createMessage (MsgTypes type, MessageHdr* msg, int messages);
+  void
+  updateMemberList (std::vector<MemberListEntry>* goshiped);
+  void
+  updateMember (MemberListEntry* goss);
   bool
   isAlreadyFailedNode (int id);
   void

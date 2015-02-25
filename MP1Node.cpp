@@ -339,58 +339,62 @@ MP1Node::recvCallBack (void *env, char *data, int size)
 
 	}
       cout << "searching failed nodes in menberlist of node " << memberNode->addr.getAddress () << endl;
-      for (std::vector<MemberListEntry>::iterator fail = memberNode->memberList.begin (); fail != memberNode->memberList.end (); ++fail)
+      std::vector<MemberListEntry>::iterator updatedMember = memberNode->memberList.begin ();
+      bool deleted = false;
+      while (updatedMember != memberNode->memberList.end ())
 	{
-	  int timeout = par->getcurrtime () - fail->timestamp;
+	  int timeout = par->getcurrtime () - updatedMember->timestamp;
 
-	  for (std::vector<int>::iterator failedNode = failedNodes.begin (); failedNode != failedNodes.end (); ++failedNode)
+	  if (timeout >= 100)
 	    {
-	      if (*failedNode == fail->id)
+
+	      if (!isAlreadyFailedNode (updatedMember->id))
 		{
-		  if (timeout >= 100)
+		  //add to failed nodes
+		  cout << "detected failed node  " << updatedMember->id << " at " << memberNode->addr.getAddress () << endl;
+		  failedNodes.push_back (updatedMember->id);
+
+		  //broadcast failed messages
+		  for (std::vector<MemberListEntry>::iterator msgit = memberNode->memberList.begin ();
+		      msgit != memberNode->memberList.end (); ++msgit)
 		    {
-
-		      //add to failed nodes
-		      cout << "detected failed node  " << fail->id << " at " << memberNode->addr.getAddress () << endl;
-		      failedNodes.push_back (fail->id);
-		      //broadcast failed messages
-		      for (std::vector<MemberListEntry>::iterator msgit = memberNode->memberList.begin ();
-			  msgit != memberNode->memberList.end (); ++msgit)
+		      if (msgit->id != updatedMember->id)
 			{
-			  if (msgit->id != fail->id)
-			    {
-			      size_t msgsize = sizeof(MessageHdr) + sizeof(MemberListEntry);
-			      MessageHdr* FAILMSG = (MessageHdr *) malloc (msgsize * sizeof(char));
-			      this->createMessage (FAIL, FAILMSG, 1);
+			  size_t msgsize = sizeof(MessageHdr) + sizeof(MemberListEntry);
+			  MessageHdr* FAILMSG = (MessageHdr *) malloc (msgsize * sizeof(char));
+			  this->createMessage (FAIL, FAILMSG, 1);
 
-			      Address address = parseAddress (msgit->id, msgit->port);
-			      if (!(address == memberNode->addr))
-				{
-				  memcpy (((char*) FAILMSG + sizeof(MessageHdr)), &(msgit), sizeof(MemberListEntry));
-				  emulNet->ENsend (&memberNode->addr, &address, (char *) FAILMSG, msgsize);
-				  /*cout << "sending " << FAILMSG->msgType << " from " << memberNode->addr.getAddress () << " to "
-				   << address.getAddress () << " with heartbeat " << FAILMSG->heartbeat << endl;*/
-				  free (FAILMSG);
-				}
+			  Address address = parseAddress (msgit->id, msgit->port);
+			  if (!(address == memberNode->addr))
+			    {
+			      memcpy (((char*) FAILMSG + sizeof(MessageHdr)), &(msgit), sizeof(MemberListEntry));
+			      emulNet->ENsend (&memberNode->addr, &address, (char *) FAILMSG, msgsize);
+			      cout << "sending " << FAILMSG->msgType << " from " << memberNode->addr.getAddress () << " to "
+				  << address.getAddress () << " with heartbeat " << FAILMSG->heartbeat << endl;
+			      free (FAILMSG);
 			    }
 			}
-
 		    }
-		  else if (timeout >= 200)
-		    {
-		      //delete from memberlist
-		      failedNodes.erase (failedNode);
-		      memberNode->memberList.erase (fail);
-		      Address address = parseAddress (fail->id, fail->port);
-		      log->logNodeRemove (&memberNode->addr, &address);
 
-		    }
 		}
-
+	      else if (timeout >= 200)
+		{
+		  cout << "deleting node " << updatedMember->id << " from " << memberNode->addr.getAddress () << endl;
+		  failedNodes.erase (remove (failedNodes.begin (), failedNodes.end (), updatedMember->id), failedNodes.end ());
+		  cout << "deleted node " << updatedMember->id << " from failed at" << memberNode->addr.getAddress () << endl;
+		  memberNode->memberList.erase (updatedMember);
+		  cout << "deleted node " << updatedMember->id << " from members at" << memberNode->addr.getAddress () << endl;
+		  Address address = parseAddress (updatedMember->id, updatedMember->port);
+		  log->logNodeRemove (&memberNode->addr, &address);
+		  deleted = true;
+		}
 	    }
-
+	  if (!deleted)
+	    {
+	      ++updatedMember;
+	    }
+	  deleted = false;
 	}
-
     }
   else if (header->msgType == FAIL)
     {
@@ -413,6 +417,20 @@ MP1Node::recvCallBack (void *env, char *data, int size)
   return true;
 }
 
+bool
+MP1Node::isAlreadyFailedNode (int id)
+{
+
+  for (std::vector<int>::iterator failedNode = failedNodes.begin (); failedNode != failedNodes.end (); ++failedNode)
+    {
+      if (*failedNode == id)
+	{
+	  return true;
+	}
+    }
+  return false;
+
+}
 void
 MP1Node::createMessage (MsgTypes type, MessageHdr* msg, int messages)
 {
@@ -467,37 +485,38 @@ MP1Node::gossip ()
     }
   else
     {
-      int selected = 0;
+      int selected = 1;
       int random;
       int selectedTable[memberNode->memberList.size ()];
-      for (int i = 0; i < memberNode->memberList.size (); i++)
+      selectedTable[0] = 1;
+      for (int i = 1; i < memberNode->memberList.size (); i++)
 	{
 	  selectedTable[i] = 0;
 	}
 
-      std::vector<MemberListEntry>::iterator it = memberNode->memberList.begin ();
+      std::vector<MemberListEntry>::iterator it;
       while (selected < k)
 	{
+	  it = memberNode->memberList.begin ();
 	  random = rand () % memberNode->memberList.size ();
+	  cout << "try random" << random << " for size" << memberNode->memberList.size () << endl;
 	  if (selectedTable[random] != 1)
 	    {
 	      it = it + random;
 	      Address address = parseAddress (it->id, it->port);
-	      if (!(address == memberNode->addr))
-		{
-		  size_t msgsize = sizeof(MessageHdr) + (memberNode->memberList.size () * sizeof(MemberListEntry));
-		  MessageHdr* GOSSIPMSG = (MessageHdr *) malloc (msgsize * sizeof(char));
-		  this->createMessage (GOSSIP, GOSSIPMSG, memberNode->memberList.size ());
-		  this->fillMemberList (GOSSIPMSG);
-		  emulNet->ENsend (&memberNode->addr, &address, (char *) GOSSIPMSG, msgsize);
-		  cout << "sending random" << GOSSIPMSG->msgType << " from " << memberNode->addr.getAddress () << " to "
-		      << address.getAddress () << " with heartbeat " << GOSSIPMSG->heartbeat << endl;
-		  free (GOSSIPMSG);
 
-		  selected = selected + 1;
-		  it = memberNode->memberList.begin ();
-		  selectedTable[random] = 1;
-		}
+	      size_t msgsize = sizeof(MessageHdr) + (memberNode->memberList.size () * sizeof(MemberListEntry));
+	      MessageHdr* GOSSIPMSG = (MessageHdr *) malloc (msgsize * sizeof(char));
+	      this->createMessage (GOSSIP, GOSSIPMSG, memberNode->memberList.size ());
+	      this->fillMemberList (GOSSIPMSG);
+	      emulNet->ENsend (&memberNode->addr, &address, (char *) GOSSIPMSG, msgsize);
+	      cout << "sending random" << GOSSIPMSG->msgType << " from " << memberNode->addr.getAddress () << " to "
+		  << address.getAddress () << " with heartbeat " << GOSSIPMSG->heartbeat << endl;
+	      free (GOSSIPMSG);
+
+	      selected = selected + 1;
+
+	      selectedTable[random] = 1;
 	    }
 
 	}

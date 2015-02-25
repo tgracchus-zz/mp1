@@ -28,8 +28,9 @@
 /**
  * Message Types
  */
-enum MsgTypes {
-	JOINREQ, JOINREP, GOSSIP,FAIL,DUMMYLASTMSGTYPE
+enum MsgTypes
+{
+  JOINREQ, JOINREP, GOSSIP, FAIL, DUMMYLASTMSGTYPE
 };
 
 /**
@@ -37,11 +38,12 @@ enum MsgTypes {
  *
  * DESCRIPTION: Header and content of a message
  */
-typedef struct MessageHdr {
-	enum MsgTypes msgType;
-	Address sender;
-	long heartbeat;
-	int memberSize;
+typedef struct MessageHdr
+{
+  enum MsgTypes msgType;
+  Address sender;
+  long heartbeat;
+  int memberSize;
 } MessageHdr;
 
 /**
@@ -49,40 +51,65 @@ typedef struct MessageHdr {
  *
  * DESCRIPTION: Class implementing Membership protocol functionalities for failure detection
  */
-class MP1Node {
+class MP1Node
+{
 private:
-	EmulNet *emulNet;
-	Log *log;
-	Params *par;
-	Member *memberNode;
-	int k;
-	char NULLADDR[6];
-	vector<int> failedNodes;
+  EmulNet *emulNet;
+  Log *log;
+  Params *par;
+  Member *memberNode;
+  int k;
+  char NULLADDR[6];
+  vector<int> failedNodes;
+  vector<MemberListEntry>::iterator lastGossip;
 
 public:
-	MP1Node(Member *, Params *, EmulNet *, Log *, Address *);
-	Member * getMemberNode() {
-		return memberNode;
-	}
-	int recvLoop();
-	static int enqueueWrapper(void *env, char *buff, int size);
-	void nodeStart(char *servaddrstr, short serverport);
-	int initThisNode(Address *joinaddr);
-	int introduceSelfToGroup(Address *joinAddress);
-	int finishUpThisNode();
-	void nodeLoop();
-	void checkMessages();
-	bool recvCallBack(void *env, char *data, int size);
-	void nodeLoopOps();
-	int isNullAddress(Address *addr);
-	Address getJoinAddress();
-	void initMemberListTable(Member *memberNode, int id, int port);
-	void printAddress(Address *addr);
-	virtual ~MP1Node();
-	void createMessage(MsgTypes type,MessageHdr* msg,int messages);
-	void fillMemberList(MessageHdr* msg);
-	Address parseAddress(int id, int port);
-	void gossip();
+  MP1Node (Member *, Params *, EmulNet *, Log *, Address *);
+  Member *
+  getMemberNode ()
+  {
+    return memberNode;
+  }
+  int
+  recvLoop ();
+  static int
+  enqueueWrapper (void *env, char *buff, int size);
+  void
+  nodeStart (char *servaddrstr, short serverport);
+  int
+  initThisNode (Address *joinaddr);
+  int
+  introduceSelfToGroup (Address *joinAddress);
+  int
+  finishUpThisNode ();
+  void
+  nodeLoop ();
+  void
+  checkMessages ();
+  bool
+  recvCallBack (void *env, char *data, int size);
+  void
+  nodeLoopOps ();
+  int
+  isNullAddress (Address *addr);
+  Address
+  getJoinAddress ();
+  void
+  initMemberListTable (Member *memberNode, int id, int port);
+  void
+  printAddress (Address *addr);
+  virtual
+  ~MP1Node ();
+  void
+  createMessage (MsgTypes type, MessageHdr* msg, int messages);
+  bool
+  isAlreadyFailedNode (int id);
+  void
+  fillMemberList (MessageHdr* msg);
+  Address
+  parseAddress (int id, int port);
+  void
+  gossip ();
 };
 
 #endif /* _MP1NODE_H_ */

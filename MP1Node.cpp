@@ -237,8 +237,9 @@ MP1Node::checkMessages ()
 {
   void *ptr;
   int size;
-
-  cout << "----------- START CHECK MESSAGESS:" << memberNode->addr.getAddress () <<" -------------------"<< endl;
+  cout << endl;
+  cout << "-----------  NODE: " << memberNode->addr.getAddress () << " -------------------" << endl;
+  cout << "----------- START CHECK MESSAGESS:" << memberNode->addr.getAddress () << " -------------------" << endl;
   // Pop waiting messages from memberNode's mp1q
   while (!memberNode->mp1q.empty ())
     {
@@ -545,7 +546,7 @@ MP1Node::nodeLoopOps ()
 
 		      if (!(address == memberNode->addr))
 			{
-			  memcpy (((char*) FAILMSG + sizeof(MessageHdr)), &(msgit), sizeof(MemberListEntry));
+			  memcpy (((char*) FAILMSG + sizeof(MessageHdr)), &(*msgit), sizeof(MemberListEntry));
 			  emulNet->ENsend (&memberNode->addr, &address, (char *) FAILMSG, msgsize);
 			  cout << "sending " << FAILMSG->msgType << " from " << memberNode->addr.getAddress () << " to "
 			      << address.getAddress () << " with heartbeat " << FAILMSG->heartbeat << endl;
@@ -560,7 +561,15 @@ MP1Node::nodeLoopOps ()
 	      Address address = parseAddress (updatedMember->id, updatedMember->port);
 	      log->logNodeRemove (&memberNode->addr, &address);
 	      cout << "deleting node " << updatedMember->id << " from " << memberNode->addr.getAddress () << endl;
+	      for (std::vector<int>::iterator ita = failedNodes.begin (); ita != failedNodes.end (); ++ita)
+		{
+		  cout << "failed node " << *ita << endl;
+		}
 	      failedNodes.erase (remove (failedNodes.begin (), failedNodes.end (), updatedMember->id), failedNodes.end ());
+	      for (std::vector<int>::iterator ita = failedNodes.begin (); ita != failedNodes.end (); ++ita)
+		{
+		  cout << " after failed node " << *ita << endl;
+		}
 	      memberNode->memberList.erase (updatedMember);
 	      --updatedMember;
 
